@@ -1,179 +1,104 @@
 # Contexto do Projeto — Catálogo de Músicas com Spotify API (Padrão SENAI)
 
-> **Arquivo de contexto para continuar o projeto em outra IA.**
-> Contém o histórico da conversa a partir da definição do padrão SENAI, além do resumo do banco de dados, requisitos atualizados e código já implementado.
+> **Documento de acompanhamento e contexto do projeto (Casa / SENAI).**
+> Contém o resumo completo de tudo o que já foi implementado na Web API, como rodar o projeto nos computadores do SENAI e os próximos passos (Front-end).
 
 ---
 
-## 1. Resumo do que já está pronto
+## 1. O que já está 100% pronto (Back-end Web API)
 
-- **Stack definida:**
-  - **Banco de Dados:** SQL Server (`CatalogoMusicas` — script em `database/CatalogoMusicas.sql`, já testado e executado).
-  - **Back-end:** C# ASP.NET Core (`.NET 10.0`) seguindo o **padrão SENAI** (`Database-First` com `Scaffold-DbContext`, `BdContextCatalogo`, `Models`, `DTO`, `Interfaces`, `Repositories`, `Controllers`, `Services`, `Utils`, `Swagger`, `BCrypt` e `JWT`).
-  - **Front-end:** React + TypeScript.
-  - **Integração Spotify:**
-    - Busca e importação de metadados no back-end via **Spotify Web API** usando fluxo *Client Credentials* (`Services/SpotifyService.cs` já implementado e testado com sucesso).
-    - Reprodução de áudio no front-end via **Spotify Embed** (`<iframe src="https://open.spotify.com/embed/track/{spotify_id}">`), sem exigir conta Premium do usuário.
+A **Web API em ASP.NET Core (.NET 10.0)** está completa, compilando sem erros ou avisos (`0 Aviso(s), 0 Erro(s)`) e seguindo o padrão arquitetural do SENAI (baseado no projeto `Plot.WebApi`):
+
+### Estrutura implementada no projeto:
+* **`database/CatalogoMusicas.sql`**
+  * Script SQL Server completo com tabelas (`usuarios`, `generos`, `artistas`, `albuns`, `musicas`, `musica_artistas`, `musica_generos`), *constraints*, índices únicos filtrados (`WHERE spotify_id IS NOT NULL`), `vw_musicas_sem_genero` e massa de dados inicial (incluindo *Bohemian Rhapsody* com `spotify_id` real).
+* **`BdContextCatalogo/CatalogoContext.cs` & `Models/`**
+  * Gerados via `Scaffold-DbContext` (`Albun`, `Artista`, `Genero`, `Musica`, `MusicaArtista`, `Usuario`, `VwMusicasSemGenero`).
+  * `OnConfiguring` ajustado com `if (!optionsBuilder.IsConfigured)` para respeitar a Connection String do `appsettings.json`.
+* **`Utils/`**
+  * `Criptografia.cs`: Geração e verificação de hash de senhas com **BCrypt** (`BCrypt.Net-Next`) — atende **`RNF02`**.
+  * `JwtSettings.cs`: Mapeamento da seção `"Jwt"` do `appsettings.json`.
+* **`DTOs/`**
+  * `LoginDTO.cs`: Validação de entrada do login (`RF01`).
+  * `GeneroDTO.cs`: Validação de cadastro e edição de gêneros (`RF11`).
+  * `UsuarioDTO.cs`: Cadastro/edição de usuários pelo Admin (`RF13`, `RF14`).
+  * `UsuarioAutenticacaoDTO.cs`: Edição do próprio perfil pelo usuário logado sem permitir alterar `Perfil` ou `Ativo` (`RF07`, `RN09`).
+  * `UsuarioRespostaDTO.cs`: Record de retorno seguro omitindo `SenhaHash`.
+  * `MusicaDTO.cs`: Cadastro manual e edição de músicas com `IValidatableObject` (`RF08`, `RF09`, `RN05` a `RN08`).
+  * `MusicaImportacaoSpotify.cs`: Recebe `SpotifyTrackId`, `Descricao` e `IdGeneros` para importação automática (`RF08`).
+  * `MusicRespostaDTO.cs`: Retorno formatado com dados da música, álbum, lista ordenada de artistas e gêneros (`RF03`, `RF06`).
+* **`Interfaces/` & `Repositories/`**
+  * `IGeneroRepository.cs` / `GeneroRepository.cs`: CRUD de gêneros e busca por lista de IDs.
+  * `IUsuarioRepository.cs` / `UsuarioRepository.cs`: CRUD de usuários, hash automático de senha, bloqueio de login para inativos (`RN04`) e desativação lógica (`RF15`).
+  * `IMusicaRepository.cs` / `MusicaRepository.cs`: Listagem paginada com busca por título (`RF05`) e filtro por gênero (`RF04`), exclusão lógica (`RF10`) e deduplicação automática de artistas e álbuns por `spotify_id` ou nome (`ObterOuCriarArtistaAsync` e `ObterOuCriarAlbumAsync` — `RN10`).
+* **`Services/SpotifyService.cs`**
+  * Autenticação na Spotify Web API via *Client Credentials Flow* com cache do token em memória.
+  * `BuscarFaixasAsync`: Pesquisa faixas no Spotify (`GET /v1/search?type=track`).
+  * `ObterFaixaPorIdAsync`: Busca os metadados completos de uma faixa (`GET /v1/tracks/{id}`) e converte a data de lançamento do álbum conforme a precisão (`year`, `month`, `day` — `RN08`).
+* **`Controllers/`**
+  * `LoginController.cs` (`POST /api/Login`): Autentica e gera o Token JWT com as *Claims* (`NameIdentifier`, `Name`, `Email`, `Role`).
+  * `GeneroController.cs` (`/api/Genero`): Listagem para usuários autenticados e criação/edição restrita a `ADMIN` (`RN11`).
+  * `UsuarioController.cs` (`/api/Usuario`): Gestão completa de usuários para `ADMIN` (`RN03`) + rota `PUT /api/Usuario/meu-perfil` para o próprio usuário (`RF07`, `RN09`).
+  * `SpotifyController.cs` (`GET /api/Spotify/buscar`): Busca faixas na API do Spotify (restrito a `ADMIN`).
+  * `MusicaController.cs` (`/api/Musica`): Listagem paginada/filtrada, detalhes, importação via Spotify (`POST /api/Musica/importar-spotify`), cadastro manual (`POST /api/Musica`), edição (`PUT`) e exclusão lógica (`DELETE`).
+* **`Program.cs`**
+  * Configurado com injeção de dependência (`DbContext`, `Repositories`, `SpotifyService`), Autenticação JWT Bearer, política de CORS (`PermitirFrontEnd`), Swagger UI com suporte a Token Bearer (botão **Authorize**) e *Seeder* automático do primeiro usuário `ADMIN` (`admin@exemplo.com` / senha `admin1234`).
 
 ---
 
-## 2. Histórico da Conversa (a partir da definição do Padrão SENAI)
+## 2. Checklist para rodar no computador do SENAI
 
-### Usuário:
-> Sim irei seguir o padrao do SENAI
+Quando você abrir este projeto na máquina do SENAI, siga estes **3 passos rápidos**:
 
-### Assistente:
-Perfeito! Vi que no seu computador o banco `CatalogoMusicas` está rodando na instância **`localhost\MSSQLSERVER2`** (em casa, lembre-se de ajustar o nome do `Server=` caso sua instância local seja `localhost\SQLEXPRESS` ou `localhost`) e seguindo a mesma arquitetura que você já usa no SENAI (`Models`, `BdContext`, `Interfaces`, `Repositories`, `Controllers`, `DTO`, `Utils` + `Swagger` + `JWT` + `BCrypt`).
+### Passo 1: Executar o script do Banco de Dados
+1. Abra o **SQL Server Management Studio (SSMS)** no PC do SENAI.
+2. Abra e execute o arquivo `database/CatalogoMusicas.sql` para criar o banco `CatalogoMusicas` na instância do SENAI.
 
-Aqui está o passo a passo exato para preparar a base do projeto no padrão do SENAI:
-
-#### Passo 1: Instalar os pacotes NuGet
-Abra o **Console do Gerenciador de Pacotes** no Visual Studio (*Ferramentas → Gerenciador de Pacotes do NuGet → Console do Gerenciador de Pacotes*) e rode:
-
-```powershell
-Install-Package Microsoft.EntityFrameworkCore.SqlServer
-Install-Package Microsoft.EntityFrameworkCore.Tools
-Install-Package Swashbuckle.AspNetCore
-Install-Package BCrypt.Net-Next
-Install-Package Microsoft.AspNetCore.Authentication.JwtBearer
-```
-
-#### Passo 2: Gerar as `Models` e o `Context` (`Scaffold-DbContext`)
-No mesmo **Console do Gerenciador de Pacotes**, rode o comando abaixo (trocando `Server=...` pelo nome da instância do seu SQL Server caso seja diferente em casa):
-
-```powershell
-Scaffold-DbContext "Server=localhost\MSSQLSERVER2;Database=CatalogoMusicas;Trusted_Connection=True;TrustServerCertificate=True;" Microsoft.EntityFrameworkCore.SqlServer -OutputDir Models -ContextDir BdContextCatalogo -Context CatalogoContext -Force
-```
-
-Isso vai criar automaticamente:
-- **`BdContextCatalogo/CatalogoContext.cs`**
-- **`Models/`** com as classes das tabelas (`Usuario`, `Genero`, `Artista`, `Albun`, `Musica`, `MusicaArtista`, `VwMusicasSemGenero`)
-
-#### Passo 3: Colocar a Connection String no `appsettings.json` (ou User Secrets)
-No seu `appsettings.json`, adicione a seção `ConnectionStrings` e `Jwt`:
+### Passo 2: Ajustar a Connection String no `appsettings.json`
+No arquivo `appsettings.json`, já deixamos as duas strings prontas (`DefaultConnection` para Casa com Windows Auth e `SenaiConnection` para o SENAI com SQL Auth).
+No SENAI, basta copiar o valor de `SenaiConnection` para `DefaultConnection` (conferindo o nome do servidor da máquina do laboratório):
 
 ```json
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*",
   "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost\\MSSQLSERVER2;Database=CatalogoMusicas;Trusted_Connection=True;TrustServerCertificate=True;"
+    "DefaultConnection": "Server=localhost\\MSSQLSERVER2;Database=CatalogoMusicas;User Id=sa;Password=Senai@134;TrustServerCertificate=True;"
   },
-  "Jwt": {
-    "Key": "catalogo-musicas-chave-secreta-senai-2026",
-    "Issuer": "CatalogoMusicas.WebAPI",
-    "Audience": "CatalogoMusicas.WebAPI"
-  }
-}
 ```
 
-#### Passo 4: Estrutura de pastas do projeto (padrão SENAI)
-Depois do Scaffold, vamos organizar o projeto com as pastas que você já conhece:
+### Passo 3: Configurar as chaves do Spotify no User Secrets do PC do SENAI
+> **Importante:** O arquivo `secrets.json` (User Secrets do Visual Studio) fica salvo numa pasta local do Windows (`%APPDATA%\Microsoft\UserSecrets`) e **não sobe para o GitHub** por segurança.
 
-```text
-CatalogoMusicas/
-├── BdContextCatalogo/
-│   └── CatalogoContext.cs        (gerado pelo Scaffold)
-├── Models/                       (geradas pelo Scaffold)
-├── DTO/                          (LoginDTO, MusicaCadastroDTO, SpotifyTrackDTO...)
-├── Interfaces/                   (IUsuarioRepository, IGeneroRepository, IMusicaRepository)
-├── Repositories/                 (UsuarioRepository, GeneroRepository, MusicaRepository)
-├── Services/
-│   └── SpotifyService.cs         (busca e obtém dados da faixa no Spotify)
-├── Utils/
-│   └── Criptografia.cs           (GerarHash e CompararHash com BCrypt)
-├── Controllers/                  (LoginController, UsuarioController, GeneroController, MusicaController, SpotifyController)
-└── Program.cs                    (DbContext, Repositories, Swagger, CORS, JWT, MapControllers)
-```
+Por isso, ao clonar/abrir o projeto no PC do SENAI:
+1. Clique com o botão direito no projeto **`CatalogoMusicas`** no Visual Studio $\rightarrow$ **Gerenciar Segredos do Usuário** (*Manage User Secrets*).
+2. Cole o seu `ClientId` e `ClientSecret` do Spotify Developer Dashboard:
+   ```json
+   {
+     "Spotify:ClientId": "SEU_CLIENT_ID_AQUI",
+     "Spotify:ClientSecret": "SEU_CLIENT_SECRET_AQUI"
+   }
+   ```
 
----
-
-### Usuário:
-> Estou querendo saber como seria o layout do site para poder montar um figma, poderia me informar se a API do Spotify retorna as letras das musicas?
-
-### Assistente:
-
-#### 1. A API do Spotify retorna a letra das músicas?
-**Não.** A API oficial do Spotify **não fornece letras** por questões de direitos autorais (no app oficial deles, as letras vêm de uma parceria fechada com a *Musixmatch*).
-
-Se você quiser colocar letras no seu layout do Figma e no sistema, você tem **duas opções**:
-1. **Usar a API gratuita do [LRCLIB](https://lrclib.net/) (Recomendado se quiser automático):**
-   - Não precisa de chave nem de cadastro.
-   - Você passa o nome da música e do artista que vieram do Spotify (`GET https://lrclib.net/api/get?track_name=Bohemian+Rhapsody&artist_name=Queen`) e ela devolve a letra inteira gratuitamente.
-2. **Deixar um campo no banco (`letra` ou a própria `descricao`):**
-   - O Admin cola a letra ou uma curiosidade sobre a faixa na hora de cadastrar/editar.
-
-#### 2. Como estruturar o Layout no Figma (Telas do Projeto)
-Com base nos seus requisitos (**RF01 a RF15**) e no que o Spotify retorna, você precisa de **5 telas principais** (ou 3 telas + 2 modais):
-
-- **O que você tem disponível para mostrar em cada música:**
-  - **Vem do Spotify:** Capa do álbum (`640x640`), Título da música, Nome(s) do(s) artista(s), Nome do álbum, Ano/Data de lançamento, Duração (`05:54`) e o **Player Embed**.
-  - **Vem do seu banco:** Gênero(s) (em formato de *tags/badges*, ex.: `Rock`, `Pop`) e Descrição/Curiosidade.
-
-- **Tela 1: Login (`RF01`)**
-  - Card centralizado com logo do catálogo, campos de **E-mail** e **Senha**, e botão **Entrar**.
-  - *Lembrete da regra de negócio:* não tem link de "Criar conta", pois só o Admin cadastra usuários.
-
-- **Tela 2: Catálogo / Home (`RF03`, `RF04`, `RF05`, `RF06`) — *Visão de Todos***
-  - **Topo (Header):**
-    - Barra de pesquisa por título (`RF05`).
-    - Avatar/Nome do usuário logado (clicar abre edição do próprio perfil `RF07` e botão Sair `RF02`).
-    - Se for **Admin**, exibe no menu os botões: *"Gerenciar Músicas"*, *"Gêneros"* e *"Usuários"*.
-  - **Filtros de Gênero (`RF04`):**
-    - Pílulas/botões horizontais no topo da listagem: `[Todos] [Rock] [Pop] [MPB] [Hip Hop]...`
-  - **Grade de Cards de Músicas (`RF03`):**
-    - Cada card mostra: **Capa do Álbum** (`album.images[0].url`), **Título**, **Artista**, **Badge do Gênero** e um botão de **Play ▶**.
-  - **Rodapé Fixo (Player Bar) ou Modal de Detalhes (`RF06`):**
-    - Quando o usuário clica numa música, abre os detalhes (Álbum, Ano, Duração, Gêneros, Descrição/Letra) e carrega o **Player Embed do Spotify** (`height: 80px` ou `152px`) fixo no rodapé da tela para ele continuar navegando enquanto ouve.
-
-- **Tela 3: Cadastrar / Importar Música do Spotify (`RF08`, `RF09`, `RF10`) — *Só Admin***
-  1. **Busca no Spotify:** Uma barra *"Buscar música no Spotify..."*. Quando o Admin pesquisa, aparece uma lista com os 10 resultados vindos da API (com fotinho da capa, título, artista, álbum e botão **"Selecionar"**).
-  2. **Formulário de complemento:** Ao clicar em "Selecionar", os dados do Spotify já aparecem preenchidos e travados (Capa, Título, Artista, Álbum, Duração, Ano), e o Admin só preenche o que falta do seu sistema:
-     - **Gênero(s):** caixas de seleção (`Rock`, `Pop`...) — `RN05`
-     - **Descrição:** campo de texto — `RN06`
-     - Botão **"Salvar no Catálogo"**.
-
-- **Tela 4: Gerenciar Gêneros (`RF11`) — *Só Admin***
-  - Pode ser uma tela simples ou um modal com um campo *"Novo gênero"* + botão *Adicionar*, e abaixo a lista dos gêneros cadastrados com botão de *Editar*.
-
-- **Tela 5: Gerenciar Usuários (`RF12`, `RF13`, `RF14`, `RF15`) — *Só Admin***
-  - Tabela listando: **Nome**, **E-mail**, **Perfil** (`ADMIN` ou `USER`), **Status** (`Ativo` / `Inativo`) e botões de *Editar* e *Ativar/Desativar* (switch/toggle).
-  - Botão no topo **"+ Novo Usuário"** que abre um modal com Nome, E-mail, Senha e Perfil.
-
-- **Dica para o Player no Figma:**
-  - Reserve um retângulo de **`100%` de largura por `80px` (compacto) ou `152px` (completo) de altura** com cantos arredondados (`12px`) para representar o `<iframe src="https://open.spotify.com/embed/track/...">`.
+### Passo 4: Rodar e Logar no Swagger
+1. Aperte **F5** para rodar a API.
+2. O *Seeder* do `Program.cs` criará automaticamente o usuário administrador inicial caso o banco esteja vazio:
+   * **E-mail:** `admin@exemplo.com`
+   * **Senha:** `admin1234`
+3. Faça login na rota `POST /api/Login`, copie o `token` retornado, clique no botão **Authorize** no topo do Swagger e cole o token.
 
 ---
 
-### Usuário:
-> Consegue alterar o docs que eu mandei para a forma como o banco esta construido?
+## 3. O que ainda falta fazer no Projeto Geral
 
-### Assistente:
-Atualizei o documento Word (`Levantamento de Requisitos e Regras de Negócio.docx`) mantendo toda a formatação e as tabelas originais, ajustando o texto exatamente para o que foi construído no banco `CatalogoMusicas.sql`:
+Com o Banco de Dados e o Back-end (API) concluídos, as próximas etapas do projeto são:
 
-| Código | Texto atualizado (fiel ao banco atual) |
-|---|---|
-| **RF06** | Visualizar detalhes e reproduzir uma música (player Spotify Embed) |
-| **RF08** | Importar músicas da API do Spotify ou cadastrar manualmente |
-| **RF09** | Editar informações de músicas |
-| **RF10** | Excluir músicas do catálogo (exclusão lógica) |
-| **RNF03** | Comunicação entre front-end e back-end por API REST e integração com a Spotify Web API |
-| **RN05** | Cada música deverá estar associada a pelo menos um artista e um gênero. |
-| **RN06** | O título e a duração da música serão obrigatórios; a descrição, o álbum e o identificador do Spotify (`spotify_id`) serão opcionais. |
-| **RN07** | A duração de uma música (em milissegundos) deverá ser maior que zero. |
-| **RN08** | A data de lançamento do álbum, quando informada, não poderá ser anterior a `01/01/1900` e deverá registrar sua precisão (`ano`, `mês` ou `dia`). |
-| **RN10** | Músicas, álbuns e artistas deverão possuir um identificador único interno e, quando importados do Spotify, um `spotify_id` único. |
+1. **Prototipação no Figma (UI/UX):**
+   * Tela 1: Login (`RF01`).
+   * Tela 2: Home / Catálogo de Músicas com barra de pesquisa (`RF05`), filtro por pílulas de gênero (`RF04`), cards de músicas (`RF03`) e barra fixa/modal com o **Player Spotify Embed** (`<iframe src="https://open.spotify.com/embed/track/{spotifyId}">` — `RF06`).
+   * Tela 3: Modal/Tela de Perfil do Usuário (`RF07`).
+   * Tela 4 (Admin): Cadastrar / Importar Música buscando direto na rota `/api/Spotify/buscar` e salvando em `/api/Musica/importar-spotify` (`RF08`, `RF09`, `RF10`).
+   * Tela 5 (Admin): Gerenciar Gêneros (`/api/Genero` — `RF11`) e Gerenciar Usuários (`/api/Usuario` — `RF12` a `RF15`).
 
----
-
-## 3. Onde paramos / Próximos passos para a próxima IA
-
-1. Rodar o `Install-Package` e o `Scaffold-DbContext` no projeto `CatalogoMusicas` para gerar `BdContextCatalogo/CatalogoContext.cs` e `Models/`.
-2. Criar o `Utils/Criptografia.cs` (com `BCrypt.Net-Next`).
-3. Criar as `Interfaces` e `Repositories` (`UsuarioRepository`, `GeneroRepository`, `MusicaRepository`) incluindo a lógica de importação do Spotify (verificar se o `spotify_id` do artista/álbum já existe antes de inserir).
-4. Criar os `Controllers` (`LoginController`, `UsuarioController`, `GeneroController`, `MusicaController`, `SpotifyController`) e configurar o `Program.cs` com `Swagger`, `JWT` e `CORS`.
+2. **Desenvolvimento do Front-end (React + TypeScript):**
+   * Criação do projeto React (`Vite` + `TypeScript`).
+   * Configuração do `axios` enviando o cabeçalho `Authorization: Bearer <token>`.
+   * Criação do contexto de Autenticação (guardando token e perfil `ADMIN`/`USER` e bloqueando rotas administrativas — `RNF06`).
+   * Integração das telas com os endpoints da API e exibição do `<iframe src="https://open.spotify.com/embed/track/{spotifyId}">`.
