@@ -1,4 +1,4 @@
-﻿using CatalogoMusicas.DTOs;
+using CatalogoMusicas.DTOs;
 using CatalogoMusicas.Interfaces;
 using CatalogoMusicas.Models;
 using CatalogoMusicas.Repositories;
@@ -21,6 +21,7 @@ namespace CatalogoMusicas.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> Listar()
         {
             var generos = await _generoRepository.Listar();
@@ -29,6 +30,7 @@ namespace CatalogoMusicas.Controllers
         }
 
         [HttpGet("{id:int}")]
+        [AllowAnonymous]
         public async Task<IActionResult> BuscarPorId(int id)
         {
             var genero = await _generoRepository.BuscarPorId(id);

@@ -23,8 +23,8 @@ namespace CatalogoMusicas.Controllers
             if (string.IsNullOrWhiteSpace(q))
                 return BadRequest(new { mensagem = "Informe um termo para buscar no Spotify." });
 
-            var json = await _spotifyService.BuscarFaixasAsync(q, offset);
-            return Content(json, "application/json");
+            var faixas = await _spotifyService.BuscarFaixasAsync(q, offset);
+            return Ok(faixas);
         }
     }
 }

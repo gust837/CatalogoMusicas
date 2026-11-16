@@ -46,7 +46,7 @@ namespace CatalogoMusicas.Services
             return _token;
         }
 
-        public async Task<string> BuscarFaixasAsync(string texto, int offset = 0)
+        public async Task<List<SpotifyBuscaItemDTO>> BuscarFaixasAsync(string texto, int offset = 0)
         {
             var token = await ObterTokenAsync();
             var url = $"https://api.spotify.com/v1/search?type=track&limit=10&offset={offset}" +
@@ -57,7 +57,38 @@ namespace CatalogoMusicas.Services
 
             var resp = await _http.SendAsync(req);
             resp.EnsureSuccessStatusCode();
-            return await resp.Content.ReadAsStringAsync();
+
+            using var json = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            var items = json.RootElement.GetProperty("tracks").GetProperty("items");
+
+            var resultado = new List<SpotifyBuscaItemDTO>();
+
+            foreach (var item in items.EnumerateArray())
+            {
+                var albumEl = item.GetProperty("album");
+                string? capaUrl = null;
+                if (albumEl.TryGetProperty("images", out var imgs) && imgs.GetArrayLength() > 0)
+                {
+                    capaUrl = imgs[0].GetProperty("url").GetString();
+                }
+
+                var nomesArtistas = new List<string>();
+                foreach (var art in item.GetProperty("artists").EnumerateArray())
+                {
+                    nomesArtistas.Add(art.GetProperty("name").GetString()!);
+                }
+
+                resultado.Add(new SpotifyBuscaItemDTO(
+                    SpotifyTrackId: item.GetProperty("id").GetString()!,
+                    Titulo: item.GetProperty("name").GetString()!,
+                    Artistas: string.Join(", ", nomesArtistas),
+                    Album: albumEl.GetProperty("name").GetString()!,
+                    CapaUrl: capaUrl,
+                    DuracaoMs: item.GetProperty("duration_ms").GetInt32()
+                ));
+            }
+
+            return resultado;
         }
 
         public async Task<SpotifyTrackInfo?> ObterFaixaPorIdAsync(string spotifyTrackId)
@@ -138,4 +169,13 @@ namespace CatalogoMusicas.Services
         string? AlbumCapaUrl,
         List<(string SpotifyId, string Nome)> Artistas
     );
+
+    public record SpotifyBuscaItemDTO(
+    string SpotifyTrackId,
+    string Titulo,
+    string Artistas,
+    string Album,
+    string? CapaUrl,
+    int DuracaoMs
+);
 }

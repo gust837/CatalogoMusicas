@@ -1,4 +1,4 @@
-﻿using CatalogoMusicas.DTOs;
+using CatalogoMusicas.DTOs;
 using CatalogoMusicas.Interfaces;
 using CatalogoMusicas.Models;
 using CatalogoMusicas.Services;
@@ -15,18 +15,22 @@ namespace CatalogoMusicas.Controllers
         private readonly IMusicaRepository _musicaRepository;
         private readonly IGeneroRepository _generoRepository;
         private readonly SpotifyService _spotifyService;
+        private readonly LetraService _letraService;
 
         public MusicaController(
             IMusicaRepository musicaRepository,
             IGeneroRepository generoRepository,
-            SpotifyService spotifyService)
+            SpotifyService spotifyService,
+            LetraService letraService)
         {
             _musicaRepository = musicaRepository;
             _generoRepository = generoRepository;
             _spotifyService = spotifyService;
+            _letraService = letraService;
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> Listar(
             [FromQuery] int pagina = 1,
             [FromQuery] int tamanhoPagina = 10,
@@ -45,6 +49,7 @@ namespace CatalogoMusicas.Controllers
         }
 
         [HttpGet("{id:int}")]
+        [AllowAnonymous]
         public async Task<IActionResult> BuscarPorId(int id)
         {
             var musica = await _musicaRepository.BuscarPorId(id);
@@ -104,6 +109,48 @@ namespace CatalogoMusicas.Controllers
 
             var musicaCompleta = await _musicaRepository.BuscarPorId(novaMusica.Id);
             return CreatedAtAction(nameof(BuscarPorId), new { id = novaMusica.Id }, MusicaRespostaDTO.Converter(musicaCompleta!));
+        }
+
+        [HttpGet("{id:int}/letra")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ObterLetra(int id)
+        {
+            var musica = await _musicaRepository.BuscarPorId(id);
+            if (musica == null)
+                return NotFound(new { mensagem = "Música não encontrada." });
+            var artistaPrincipal = musica.MusicaArtista
+                .OrderBy(ma => ma.Ordem)
+                .Select(ma => ma.Artista.Nome)
+                .FirstOrDefault() ?? string.Empty;
+            var resultado = await _letraService.ObterLetraAsync(
+                musica.Id,
+                musica.Titulo,
+                artistaPrincipal,
+                musica.Album?.Titulo,
+                musica.DuracaoMs);
+            if (resultado.LetraOriginal == null && resultado.LinhasSincronizadas.Count == 0)
+                return NotFound(new { mensagem = "Letra não encontrada para esta música." });
+            return Ok(resultado);
+        }
+
+        [HttpGet("{id:int}/traducao")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ObterTraducao(int id)
+        {
+            var musica = await _musicaRepository.BuscarPorId(id);
+            if (musica == null)
+                return NotFound(new { mensagem = "Música não encontrada." });
+            var artistaPrincipal = musica.MusicaArtista
+                .OrderBy(ma => ma.Ordem)
+                .Select(ma => ma.Artista.Nome)
+                .FirstOrDefault() ?? string.Empty;
+            var traducao = await _letraService.ObterTraducaoAsync(
+                musica.Id,
+                musica.Titulo,
+                artistaPrincipal,
+                musica.Album?.Titulo,
+                musica.DuracaoMs);
+            return Ok(new { traducaoPortugues = traducao });
         }
 
         [HttpPost]

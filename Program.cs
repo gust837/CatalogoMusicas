@@ -25,6 +25,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton(sp => new SpotifyService(
     sp.GetRequiredService<IHttpClientFactory>().CreateClient(),
     sp.GetRequiredService<IConfiguration>()));
+builder.Services.AddScoped<LetraService>();
 
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
     ?? throw new InvalidOperationException("Configuração Jwt não encontrada.");
